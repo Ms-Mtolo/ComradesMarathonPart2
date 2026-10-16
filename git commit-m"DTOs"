@@ -1,0 +1,59 @@
+namespace ComradesMarathonAPI.DTOs;
+
+public class LoginDto
+{
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class RegisterDto
+{
+    public string FirstName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+    public string Role { get; set; } = "Participant";
+}
+
+public class UpdateProfileDto
+{
+    public string? FirstName { get; set; }
+    public string? Email { get; set; }
+    public string? Password { get; set; }
+}
+
+public class EventDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public DateTime Date { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty;
+}
+
+public class CategoryDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal Distance { get; set; }
+    public string AgeGroup { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+
+public class EnrolmentDto
+{
+    public int CategoryId { get; set; }
+}
+
+public class EnrolmentStatusDto
+{
+    public string Status { get; set; } = string.Empty;
+}
+
+public class ResultDto
+{
+    public TimeSpan FinishTime { get; set; }
+    public int Position { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
