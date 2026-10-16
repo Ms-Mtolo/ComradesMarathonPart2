@@ -1,0 +1,64 @@
+
+﻿using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using ComradesMarathonAPI.DTOs;
+using ComradesMarathonAPI.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api")]
+public class CategoriesController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public CategoriesController(AppDbContext db) => _db = db;
+
+    [HttpGet("events/{eventId}/categories")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByEvent(int eventId)
+    {
+        if (!await _db.Events.AnyAsync(e => e.EventId == eventId)) return NotFound();
+        return Ok(await _db.Categories.Where(c => c.EventId == eventId).ToListAsync());
+    }
+
+    [HttpPost("events/{eventId}/categories")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Create(int eventId, [FromBody] CategoryDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ev = await _db.Events.FindAsync(eventId);
+        if (ev == null) return NotFound();
+        if (ev.OrganizerId != userId) return Forbid();
+
+        var cat = new Category
+        {
+            Name = dto.Name,
+            Description = dto.Description,
+            Distance = dto.Distance,
+            AgeGroup = dto.AgeGroup,
+            Price = dto.Price,
+            EventId = eventId
+        };
+        _db.Categories.Add(cat);
+        await _db.SaveChangesAsync();
+        return StatusCode(201, cat);
+    }
+
+    [HttpPut("categories/{id}")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Update(int id, [FromBody] CategoryDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var cat = await _db.Categories.Include(c => c.Event).FirstOrDefaultAsync(c => c.CategoryId == id);
+        if (cat == null) return NotFound();
+        if (cat.Event!.OrganizerId != userId) return Forbid();
+
+        cat.Name = dto.Name; cat.Description = dto.Description; cat.Distance = dto.Distance;
+        cat.AgeGroup = dto.AgeGroup; cat.Price = dto.Price;
+        await _db.SaveChangesAsync();
+        return Ok(cat);
+    }
+}
