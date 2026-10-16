@@ -1,0 +1,87 @@
+
+﻿using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using ComradesMarathonAPI.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ComradesMarathonAPI.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api")]
+[Authorize]
+public class ResultsController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public ResultsController(AppDbContext db) => _db = db;
+
+    [HttpGet("enrolments/{id}/result")]
+    public async Task<IActionResult> Get(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        var res = await _db.Results.Include(r => r.Enrolment).ThenInclude(e => e!.Event)
+            .FirstOrDefaultAsync(r => r.EnrolmentId == id);
+        if (res == null) return NotFound();
+        if (role == "Participant" && res.Enrolment!.UserId != userId) return Forbid();
+        if (role == "Organiser" && res.Enrolment!.Event!.OrganizerId != userId) return Forbid();
+        return Ok(res);
+    }
+
+    [HttpPost("enrolments/{id}/result")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Create(int id, [FromBody] ResultDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var en = await _db.Enrolments.Include(e => e.Event).FirstOrDefaultAsync(e => e.EnrolmentId == id);
+        if (en == null) return NotFound();
+        if (en.Event!.OrganizerId != userId) return Forbid();
+        if (await _db.Results.AnyAsync(r => r.EnrolmentId == id))
+            return Conflict(new { message = "Result already exists for this enrolment" });
+
+        var res = new Result
+        {
+            EnrolmentId = id,
+            FinishTime = dto.FinishTime,
+            OverallPosition = dto.Position,
+            Status = dto.Status
+        };
+        _db.Results.Add(res);
+        await _db.SaveChangesAsync();
+        return StatusCode(201, res);
+    }
+
+    [HttpPut("results/{id}")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Update(int id, [FromBody] ResultDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var res = await _db.Results.Include(r => r.Enrolment).ThenInclude(e => e!.Event)
+            .FirstOrDefaultAsync(r => r.ResultId == id);
+        if (res == null) return NotFound();
+        if (res.Enrolment!.Event!.OrganizerId != userId) return Forbid();
+
+        res.FinishTime = dto.FinishTime;
+        res.OverallPosition = dto.Position;
+        res.Status = dto.Status;
+        await _db.SaveChangesAsync();
+        return Ok(res);
+    }
+
+    [HttpDelete("results/{id}")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var res = await _db.Results.Include(r => r.Enrolment).ThenInclude(e => e!.Event)
+            .FirstOrDefaultAsync(r => r.ResultId == id);
+        if (res == null) return NotFound();
+        if (res.Enrolment!.Event!.OrganizerId != userId) return Forbid();
+
+        _db.Results.Remove(res);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+}
