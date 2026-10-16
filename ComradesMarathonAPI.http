@@ -1,0 +1,6 @@
+@ComradesMarathonAPI_HostAddress = http://localhost:5053
+
+GET {{ComradesMarathonAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

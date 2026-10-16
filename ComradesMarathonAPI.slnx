@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../ComradesMarathonAPI.tests/ComradesMarathonAPI.tests.csproj" Id="3a95381d-a250-4eba-89ea-0a6f528341ee" />
+  <Project Path="ComradesMarathonAPI.csproj" />
+</Solution>
