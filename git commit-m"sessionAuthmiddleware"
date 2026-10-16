@@ -1,0 +1,27 @@
+// Middleware/SessionAuthMiddleware.cs
+using System.Security.Claims;
+
+public class SessionAuthMiddleware
+{
+    private readonly RequestDelegate _next;
+    public SessionAuthMiddleware(RequestDelegate next) => _next = next;
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var userId = context.Session.GetInt32("UserId");
+        var role = context.Session.GetString("Role");
+
+        if (userId.HasValue && role != null)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString()),
+                new Claim(ClaimTypes.Role, role)
+            };
+            var identity = new ClaimsIdentity(claims, "SessionAuth");
+            context.User = new ClaimsPrincipal(identity);
+        }
+
+        await _next(context);
+    }
+}
