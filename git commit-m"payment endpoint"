@@ -1,0 +1,33 @@
+
+﻿using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api/payment")]
+[Authorize]
+public class PaymentController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public PaymentController(AppDbContext db) => _db = db;
+
+    [HttpGet("admin")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAllPayments() =>
+        Ok(await _db.Payments.Include(p => p.Enrolment).ToListAsync());
+
+    [HttpGet("participant")]
+    [Authorize(Roles = "Participant")]
+    public async Task<IActionResult> GetMyPayments()
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var total = await _db.Payments
+            .Where(p => p.Enrolment!.UserId == userId)
+            .SumAsync(p => (decimal?)p.Amount) ?? 0;
+        return Ok(new { total });
+    }
+}
