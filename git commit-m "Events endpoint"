@@ -1,0 +1,85 @@
+
+﻿using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using ComradesMarathonAPI.DTOs;
+using ComradesMarathonAPI.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api/events")]
+public class EventsController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public EventsController(AppDbContext db) => _db = db;
+
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll([FromQuery] string? location, [FromQuery] DateTime? date)
+    {
+        var query = _db.Events.AsQueryable();
+        if (!string.IsNullOrEmpty(location)) query = query.Where(e => e.Location.Contains(location));
+        if (date.HasValue) query = query.Where(e => e.Date.Date == date.Value.Date);
+        return Ok(await query.Include(e => e.Categories).ToListAsync());
+    }
+
+    [HttpGet("{id}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var ev = await _db.Events.Include(e => e.Categories).FirstOrDefaultAsync(e => e.EventId == id);
+        return ev == null ? NotFound() : Ok(ev);
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Create([FromBody] EventDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ev = new Event
+        {
+            Title = dto.Title,
+            Description = dto.Description,
+            Date = dto.Date,
+            Location = dto.Location,
+            Status = dto.Status,
+            EventType = dto.EventType,
+            OrganizerId = userId
+        };
+        _db.Events.Add(ev);
+        await _db.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetById), new { id = ev.EventId }, ev);
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Update(int id, [FromBody] EventDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ev = await _db.Events.FindAsync(id);
+        if (ev == null) return NotFound();
+        if (ev.OrganizerId != userId) return Forbid();
+
+        ev.Title = dto.Title; ev.Description = dto.Description; ev.Date = dto.Date;
+        ev.Location = dto.Location; ev.Status = dto.Status; ev.EventType = dto.EventType;
+        await _db.SaveChangesAsync();
+        return Ok(ev);
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Organiser")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ev = await _db.Events.FindAsync(id);
+        if (ev == null) return NotFound();
+        if (ev.OrganizerId != userId) return Forbid();
+
+        _db.Events.Remove(ev);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+}
