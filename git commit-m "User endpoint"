@@ -1,0 +1,57 @@
+
+﻿using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using ComradesMarathonAPI.DTOs;
+using ComradesMarathonAPI.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api/users")]
+[Authorize]
+public class UsersController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public UsersController(AppDbContext db) => _db = db;
+
+    [HttpGet("email")]
+    public async Task<IActionResult> GetCurrent()
+    {
+        var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == id);
+        return user == null ? NotFound()
+            : Ok(new { user.UserId, user.FirstName, user.Email, Role = user.Role!.RoleName });
+    }
+
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await _db.Users.FindAsync(id);
+        if (user == null) return NotFound();
+
+        if (!string.IsNullOrEmpty(dto.FirstName)) user.FirstName = dto.FirstName;
+        if (!string.IsNullOrEmpty(dto.Email)) user.Email = dto.Email;
+        if (!string.IsNullOrEmpty(dto.Password))
+            user.PasswordHash = PasswordService.Hash(dto.Password);
+
+        await _db.SaveChangesAsync();
+        return Ok(new { user.UserId, user.FirstName, user.Email });
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var user = await _db.Users.FindAsync(id);
+        return user == null ? NotFound()
+            : Ok(new { user.UserId, user.FirstName, user.Email });
+    }
+
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAll() =>
+        Ok(await _db.Users.Select(u => new { u.UserId, u.FirstName, u.Email }).ToListAsync());
+}
