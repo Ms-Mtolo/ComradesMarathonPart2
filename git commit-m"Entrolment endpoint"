@@ -1,0 +1,81 @@
+using System.Security.Claims;
+using ComradesMarathonAPI.Data;
+using ComradesMarathonAPI.DTOs;
+using ComradesMarathonAPI.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ComradesMarathonAPI.Controllers;
+
+[ApiController]
+[Route("api")]
+[Authorize]
+public class EnrolmentsController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    public EnrolmentsController(AppDbContext db) => _db = db;
+
+    [HttpPost("enrolments")]
+    [Authorize(Roles = "Participant")]
+    public async Task<IActionResult> Enrol([FromBody] EnrolmentDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var cat = await _db.Categories.FindAsync(dto.CategoryId);
+        if (cat == null) return NotFound(new { message = "Category not found" });
+
+        var enrolment = new Enrolment
+        {
+            UserId = userId,
+            EventId = cat.EventId,
+            CategoryId = dto.CategoryId,
+            Status = "Pending",
+            PaymentStatus = "Pending",
+            PaymentAmount = cat.Price
+        };
+        _db.Enrolments.Add(enrolment);
+        await _db.SaveChangesAsync();
+        return StatusCode(201, enrolment);
+    }
+
+    [HttpGet("users/enrolments")]
+    public async Task<IActionResult> MyEnrolments()
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        return Ok(await _db.Enrolments
+            .Include(e => e.Event).Include(e => e.Category)
+            .Where(e => e.UserId == userId).ToListAsync());
+    }
+
+    [HttpPut("enrolments/{id}")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] EnrolmentStatusDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        var en = await _db.Enrolments.Include(e => e.Event).FirstOrDefaultAsync(e => e.EnrolmentId == id);
+        if (en == null) return NotFound();
+
+        if (role == "Participant" && en.UserId != userId) return Forbid();
+        if (role == "Organiser" && en.Event!.OrganizerId != userId) return Forbid();
+
+        en.Status = dto.Status;
+        await _db.SaveChangesAsync();
+        return Ok(en);
+    }
+
+    [HttpDelete("enrolments/{id}")]
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        var en = await _db.Enrolments.Include(e => e.Event).FirstOrDefaultAsync(e => e.EnrolmentId == id);
+        if (en == null) return NotFound();
+
+        if (role == "Participant" && en.UserId != userId) return Forbid();
+        if (role == "Organiser" && en.Event!.OrganizerId != userId) return Forbid();
+
+        _db.Enrolments.Remove(en);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+}
